@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Gastos con Voz</title>
+    <style>
+        /* Estilos generales */
+        body {
+            font-family: 'Poppins', sans-serif;
+            text-align: center;
+            margin: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background: linear-gradient(135deg, #007bff, #6610f2);
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            color: white;
+        }
+
+        /* Estilos de los inputs y botnes */
+        input, button {
+            margin: 10px;
+            padding: 12px;
+            width: 85%;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+
+        input {
+            background: white;
+            color: black;
+        }
+
+        button {
+            background: #28a745;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease-in-out, background 0.3s;
+        }
+
+        button:hover {
+            background: #218838;
+            transform: scale(1.05);
+        }
+
+        /* Botón de voz */
+        #btn-voz {
+            background: #ff5733;
+            color: white;
+
+        }
+
+        
+        #btn-voz:hover {
+            background: #c70039;
+        }
+
+        /* Botón de información */
+        #btn-info {
+            background: #007bff;
+            color: white;
+        }
+        #btn-info:hover {
+            background: #0056b3;
+        }
+
+        /* Estilos de la tabla */
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            color: black;
+        }
+        th, td {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
+            text-align: center;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+
+        /* Estilos del modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            text-align: left;
+            width: 80%;
+            max-width: 400px;
+            color: black;
+        }
+        .modal h2 {
+            margin-top: 0;
+        }
+        .modal button {
+            background: #dc3545;
+            margin-top: 10px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>💲 Simulador de Gastos💲</h2>
+        
+        <!-- Campos de entrada manual -->
+        <input type="text" id="descripcion" placeholder="Descripción del gasto">
+        <input type="number" id="monto" placeholder="Monto ($)">
+        <button onclick="agregarGasto()">Agregar Gasto</button>
+        <button id="btn-voz" onclick="reconocerVoz()">🎤 Agregar con Voz</button>
+        <p id="mensaje-error" style="color: #ff4d4d; font-weight: bold; margin-top: 10px; display: none;">
+         ⚠️ Por favor, repita nuevamente.
+        </p>
+
+        <button id="btn-info" onclick="mostrarInfo()">ℹ️ Cómo Usar</button>
+
+        <h3>📊 Gastos del Día</h3>
+
+        <!-- Tabla para mostrar los gastos -->
+        <table>
+            <thead>
+                <tr>
+                    <th>📅 Fecha</th>
+                    <th>📝 Descripción</th>
+                    <th>💲 Monto</th>
+                    <th>🗑️ Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="tabla-gastos"></tbody>
+        </table>
+
+        <h3>Total Gastado: $<span id="total">0</span></h3>
+        <button style="background: #ffc107; color: black;" onclick="borrarTodo()">🗑️ Borrar Todo</button>
+    </div>
+
+    <!-- Modal de información -->
+    <div id="modal-info" class="modal">
+        <h2>📢 Cómo Usar el Reconocimiento de Voz</h2>
+        <p>Para agregar un gasto con voz, di una frase como:</p>
+        <ul>
+            <li>💰 "200 pesos comida"</li>
+            <li>🚗 "transporte 150 pesos"</li>
+            <li>🛒 "300 pesos compras"</li>
+            <li> "No olvide mencionar "pesos" en el monto"</li>
+        </ul>
+        <button onclick="cerrarInfo()">Cerrar</button>
+    </div>
+
+    <script>
+        let gastos = JSON.parse(localStorage.getItem("gastos")) || [];
+
+        function actualizarTabla() {
+            let tabla = document.getElementById("tabla-gastos");
+            let total = document.getElementById("total");
+
+            tabla.innerHTML = "";
+            let sumaTotal = 0;
+
+            gastos.forEach((gasto, index) => {
+                let fila = document.createElement("tr");
+                fila.innerHTML = `
+                    <td>${gasto.fecha}</td>
+                    <td>${gasto.descripcion}</td>
+                    <td>$${gasto.monto}</td>
+                    <td><button class="delete" onclick="eliminarGasto(${index})">❌</button></td>
+                `;
+                tabla.appendChild(fila);
+                sumaTotal += parseFloat(gasto.monto);
+            });
+
+            total.textContent = sumaTotal.toFixed(2);
+            localStorage.setItem("gastos", JSON.stringify(gastos));
+        }
+
+        function agregarGasto() {
+            let descripcion = document.getElementById("descripcion").value.trim();
+            let monto = document.getElementById("monto").value.trim();
+            let fecha = new Date().toLocaleDateString();
+
+            if (descripcion === "" || monto === "" || isNaN(monto) || monto <= 0) {
+                alert("Ingrese una descripción y un monto válido.");
+                return;
+            }
+
+            gastos.push({ fecha, descripcion, monto });
+            actualizarTabla();
+
+            document.getElementById("descripcion").value = "";
+            document.getElementById("monto").value = "";
+        }
+/**
+         * Elimina un gasto de la lista.
+         */
+         function eliminarGasto(index) {
+            gastos.splice(index, 1);
+            actualizarTabla();
+        }
+
+        /**
+         * Borra todos los gastos y limpia la tabla.
+         */
+        function borrarTodo() {
+            if (confirm("¿Seguro que deseas borrar todos los gastos?")) {
+                gastos = [];
+                actualizarTabla();
+            }
+        }
+        function reconocerVoz() {
+    if (!('webkitSpeechRecognition' in window)) {
+        alert("Tu navegador no soporta reconocimiento de voz.");
+        return;
+    }
+
+    let reconocimiento = new webkitSpeechRecognition();
+    reconocimiento.lang = "es-ES";
+
+    reconocimiento.onresult = function(event) {
+        let transcript = event.results[0][0].transcript;
+        procesarTexto(transcript);
+    };
+
+    reconocimiento.onerror = function() {
+        mostrarError();
+    };
+
+    reconocimiento.start();
+}
+
+
+function procesarTexto(texto) {
+    // Nueva expresión regular para detectar ambos órdenes
+    let regex = /(?:(\d+)\s*pesos?\s*(en|para|de)?\s*(.*)|(.+?)\s*(\d+)\s*pesos?)/i;
+    let match = texto.match(regex);
+
+    if (match) {
+        let monto = match[1] || match[5]; // Detecta el número en ambas posiciones
+        let descripcion = match[3] || match[4] || "Sin descripción"; // Detecta la descripción en ambas posiciones
+
+        // Asigna los valores detectados a los campos
+        document.getElementById("descripcion").value = descripcion.trim();
+        document.getElementById("monto").value = monto;
+
+        // Ocultar mensaje de error si se reconoce correctamente
+        document.getElementById("mensaje-error").style.display = "none";
+        
+        agregarGasto();
+    } else {
+        mostrarError();
+    }
+}
+
+function mostrarError() {
+    document.getElementById("mensaje-error").style.display = "block";
+
+    // Ocultar el mensaje después de 3 segundos
+    setTimeout(() => {
+        document.getElementById("mensaje-error").style.display = "none";
+    }, 3000);
+}
+
+        function mostrarInfo() { document.getElementById("modal-info").style.display = "block"; }
+        function cerrarInfo() { document.getElementById("modal-info").style.display = "none"; }
+
+        actualizarTabla();
+    </script>
+
+</body>
+</html>
